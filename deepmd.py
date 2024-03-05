@@ -52,6 +52,8 @@ class DeepMD:
         datadict = {}
         filenames = os.listdir(self.base_path)
         for filename in filenames:
+            if not filename.endswith(".raw"):
+                continue
             filepath = os.path.join(self.base_path, filename)
             # read in the file
             with open(filepath, 'r+', encoding='utf-8') as file:
