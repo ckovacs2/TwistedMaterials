@@ -1,1 +1,15 @@
 *.npy filter=lfs diff=lfs merge=lfs -text
+TMD/dicts/rips_dict.npy filter=lfs diff=lfs merge=lfs -text
+TMD/dicts/type_dict.npy filter=lfs diff=lfs merge=lfs -text
+TMD/dicts/virial_dict.npy filter=lfs diff=lfs merge=lfs -text
+TMD/dicts/box_dict.npy filter=lfs diff=lfs merge=lfs -text
+TMD/dicts/energy_dict.npy filter=lfs diff=lfs merge=lfs -text
+TMD/dicts/force_dict.npy filter=lfs diff=lfs merge=lfs -text
+TMD/frames/box_frame.parquet filter=lfs diff=lfs merge=lfs -text
+TMD/frames/energy_frame.parquet filter=lfs diff=lfs merge=lfs -text
+TMD/frames/force_frame.parquet filter=lfs diff=lfs merge=lfs -text
+TMD/frames/type_frame.parquet filter=lfs diff=lfs merge=lfs -text
+TMD/frames/virial_frame.parquet filter=lfs diff=lfs merge=lfs -text
+TMD/frames/rips_0_frame.parquet filter=lfs diff=lfs merge=lfs -text
+TMD/frames/rips_1_frame.parquet filter=lfs diff=lfs merge=lfs -text
+TMD/frames/rips_2_frame.parquet filter=lfs diff=lfs merge=lfs -text
