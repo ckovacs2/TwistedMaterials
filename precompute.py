@@ -16,13 +16,14 @@ class Precompute:
     type: pd.DataFrame
     virial: pd.DataFrame
     rips: pd.DataFrame
+    splits: pd.DataFrame
     homology: int
 
 class PrecomputeIVDW:
     def __init__(self, hm:int, tmd_path:str = "TMD"):
         self.tmd_path = tmd_path
-        self.total_dict = self.compute_dict()
-        self.precompute = self.collect_frames(hm=hm)
+        total_dict = self.compute_dict()
+        self.precompute = self.collect_frames(hm=hm, total_dict=total_dict)
 
     def compute_dict(self) -> Dict[str, Dict]:
         filename_dicts = {
@@ -95,37 +96,141 @@ class PrecomputeIVDW:
         np.save("TMD/dicts/virial_dict.npy", virial_dict, allow_pickle=True)
         np.save("TMD/dicts/rips_dict.npy", rips_complexes, allow_pickle=True)
         return tmd_dict
-
-    def compute_frame(self, name:str, save_path:str = "TMD/frames") -> pd.DataFrame:
-        filename = f"{name}_frame.parquet"
+    
+    def construct_file_frame(self, curr_frame: pd.DataFrame, filepath:str) -> pd.DataFrame:
+        path_column = curr_frame['path'].apply(lambda x: x.split("/")[1:])
+        path_frame = pd.DataFrame(path_column.tolist(), columns = ['Folder', 'mol_num'])
+        path_frame['path'] = filepath
+        return path_frame
+    
+    def compute_force_frame(self, total_dict: Dict, save_path:str = "TMD/frames") -> pd.DataFrame:
+        filename = "force_frame.parquet"
         out_path = os.path.join(save_path, filename)
         if os.path.exists(out_path):
             print(f"{filename} exists. Loading now.")
             return pd.read_parquet(out_path, engine='pyarrow')
 
         print(f"{filename} doesn't exist. Creating now.")
-        data = list(self.total_dict[name][()].items())
+        data = list(total_dict['force'][()].items())
         num_files = len(data)
         frames = []
-        for n in range(num_files):
-            curr = data[n]
-            curr_frame = pd.DataFrame(curr[1].tolist())
-            curr_frame['path'] = curr[0]
-            path_column = curr_frame['path'].apply(lambda x: x.split("/")[1:])
-            path_frame = pd.DataFrame(path_column.tolist(), columns = ['Folder', 'mol_num'])
+        for n in tqdm(range(num_files)):
+            filepath, curr_data = data[n]
+            curr_data = curr_data.reshape(-1, curr_data.shape[1] * curr_data.shape[2])
+            curr_frame = pd.DataFrame(curr_data.tolist())
+            curr_frame['path'] = filepath
+            path_frame = self.construct_file_frame(curr_frame, filepath)
+            curr_frame = curr_frame.drop('path', axis = 1)
             new_frame = pd.concat([path_frame, curr_frame], axis = 1).reset_index()
             new_frame = new_frame.rename(columns = {"index": "transition"})
-            new_frame = new_frame.melt(id_vars=["path", "Folder", "mol_num", 'transition'], var_name=f"{name}_id", ignore_index=True)
             frames.append(new_frame)
 
-        total_frame = pd.concat(frames, axis = 0).sort_values(['Folder', 'mol_num', 'transition', f'{name}_id']).reset_index(drop = True)
+        total_frame = pd.concat(frames, axis = 0).sort_values(['Folder', 'mol_num', 'transition']).reset_index(drop = True)
+        total_frame.to_parquet(out_path, compression='gzip', index = False)
+        return total_frame
 
-        # save data
-        print(f"Saving {filename}.")
-        total_frame.to_parquet(out_path, compression='gzip', index=False)
+    def compute_energy_frame(self, total_dict: Dict, save_path:str = "TMD/frames") -> pd.DataFrame:
+        filename = "energy_frame.parquet"
+        out_path = os.path.join(save_path, filename)
+        if os.path.exists(out_path):
+            print(f"{filename} exists. Loading now.")
+            return pd.read_parquet(out_path, engine='pyarrow')
+
+        print(f"{filename} doesn't exist. Creating now.")
+        data = list(total_dict['energy'][()].items())
+        num_files = len(data)
+        frames = []
+        for n in tqdm(range(num_files)):
+            filepath, curr_data = data[n]
+            curr_frame = pd.DataFrame(curr_data.tolist())
+            curr_frame['path'] = filepath
+            path_frame = self.construct_file_frame(curr_frame, filepath)
+            curr_frame = curr_frame.drop('path', axis = 1)
+            new_frame = pd.concat([path_frame, curr_frame], axis = 1).reset_index()
+            new_frame = new_frame.rename(columns = {"index": "transition", 0: "energy"})
+            frames.append(new_frame)
+
+        total_frame = pd.concat(frames, axis = 0).sort_values(['Folder', 'mol_num', 'transition']).reset_index(drop = True)
+        total_frame.to_parquet(out_path, compression='gzip', index = False)
+        return total_frame
+
+    def compute_box_frame(self, total_dict: Dict, save_path: str = "TMD/frames") -> pd.DataFrame:
+        filename = "box_frame.parquet"
+        out_path = os.path.join(save_path, filename)
+        if os.path.exists(out_path):
+            print(f"{filename} exists. Loading now.")
+            return pd.read_parquet(out_path, engine='pyarrow')
+
+        print(f"{filename} doesn't exist. Creating now.")
+        data = list(total_dict['box'][()].items())
+        
+        num_files = len(data)
+        frames = []
+        for n in tqdm(range(num_files)):
+            filepath, curr_data = data[n]
+            curr_frame = pd.DataFrame(curr_data.tolist())
+            curr_frame['path'] = filepath
+            path_frame = self.construct_file_frame(curr_frame, filepath)
+            curr_frame = curr_frame.drop('path', axis = 1)
+            new_frame = pd.concat([path_frame, curr_frame], axis = 1).reset_index()
+            new_frame = new_frame.rename(columns = {"index": "transition"})
+            frames.append(new_frame)
+
+        total_frame = pd.concat(frames, axis = 0).sort_values(['Folder', 'mol_num', 'transition']).reset_index(drop = True)
+        total_frame.to_parquet(out_path, compression='gzip', index = False)
+        return total_frame
+
+    def compute_type_frame(self, total_dict: Dict, save_path: str = "TMD/frames") -> pd.DataFrame:
+        filename = "type_frame.parquet"
+        out_path = os.path.join(save_path, filename)
+        if os.path.exists(out_path):
+            print(f"{filename} exists. Loading now.")
+            return pd.read_parquet(out_path, engine='pyarrow')
+
+        print(f"{filename} doesn't exist. Creating now.")
+        data = list(total_dict['type'][()].items())
+        num_files = len(data)
+        frames = []
+        for n in tqdm(range(num_files)):
+            filepath, curr_data = data[n]
+            curr_frame = pd.DataFrame(curr_data.tolist())
+            curr_frame['path'] = filepath
+            path_frame = self.construct_file_frame(curr_frame, filepath)
+            curr_frame = curr_frame.drop('path', axis = 1)
+            new_frame = pd.concat([path_frame, curr_frame], axis = 1).reset_index()
+            new_frame = new_frame.rename(columns = {"index": "coord_point_num", 0: "atom"})
+            frames.append(new_frame)
+
+        total_frame = pd.concat(frames, axis = 0).sort_values(['Folder', 'mol_num', 'coord_point_num']).reset_index(drop = True)
+        total_frame.to_parquet(out_path, compression='gzip', index = False)
         return total_frame
     
-    def compute_rips_frame(self, hm:int, save_path:str = "TMD/frames") -> pd.DataFrame:
+    def compute_virial_frame(self, total_dict: Dict, save_path: str = "TMD/frames") -> pd.DataFrame:
+        filename = "virial_frame.parquet"
+        out_path = os.path.join(save_path, filename)
+        if os.path.exists(out_path):
+            print(f"{filename} exists. Loading now.")
+            return pd.read_parquet(out_path, engine='pyarrow')
+
+        print(f"{filename} doesn't exist. Creating now.")
+        data = list(total_dict['virial'][()].items())
+        num_files = len(data)
+        frames = []
+        for n in tqdm(range(num_files)):
+            filepath, curr_data = data[n]
+            curr_frame = pd.DataFrame(curr_data.tolist())
+            curr_frame['path'] = filepath
+            path_frame = self.construct_file_frame(curr_frame, filepath)
+            curr_frame = curr_frame.drop('path', axis = 1)
+            new_frame = pd.concat([path_frame, curr_frame], axis = 1).reset_index()
+            new_frame = new_frame.rename(columns = {"index": "transition"})
+            frames.append(new_frame)
+            
+        total_frame = pd.concat(frames, axis = 0).sort_values(['Folder', 'mol_num', 'transition']).reset_index(drop = True)
+        total_frame.to_parquet(out_path, compression='gzip', index = False)
+        return total_frame
+    
+    def compute_rips_frame(self, total_dict: Dict, hm:int, save_path:str = "TMD/frames") -> pd.DataFrame:
         filename = f"rips_{hm}_frame.parquet"
         out_path = os.path.join(save_path, filename)
         if os.path.exists(out_path):
@@ -133,7 +238,7 @@ class PrecomputeIVDW:
             return pd.read_parquet(out_path, engine='pyarrow')
 
         print(f"{filename} doesn't exist. Creating now.")
-        data = list(self.total_dict['rips'][()].items())
+        data = list(total_dict['rips'][()].items())
         num_files = len(data)
         total_frames = []
         for n in tqdm(range(num_files)):
@@ -158,17 +263,45 @@ class PrecomputeIVDW:
         total_frames_concat.to_parquet(out_path, compression="gzip", index=False)
         return total_frames_concat
     
-    def collect_frames(self, hm:int) -> Precompute:
+    def find_num_transitions(self, tmd_path: str = "TMD") -> pd.DataFrame:
+        print("Splitting data into train, val, and test sets...")
+        dirs = [path for file in os.listdir(tmd_path) if os.path.isdir(path := os.path.join(tmd_path, file)) and "IVDW" in file]
+        mol_dirs = [os.path.join(dir, mols, 'data_deepmd') for dir in dirs for mols in os.listdir(dir) if not mols.endswith('_data')]
+
+        splits = []
+        for mol_dir in mol_dirs:
+            box_path = os.path.join(mol_dir, 'box.raw')
+            with open(box_path, 'r+', encoding='utf-8') as box:
+                num_lines = len(box.readlines())
+                _, folder, mol_num, _ = mol_dir.split("/")
+                new_dir = mol_dir.rstrip("/data_deepmd")
+                if num_lines == 500:
+                    splits.append([new_dir, folder, mol_num, 'val'])
+                elif num_lines == 1000:
+                    splits.append([new_dir, folder, mol_num, 'test'])
+                else:
+                    splits.append([new_dir, folder, mol_num, 'train'])
+
+        frame = pd.DataFrame(splits, columns = ['path', 'Folder', 'mol_num', 'data_type'])
+        return frame
+    
+    def collect_frames(self, hm:int, total_dict: Dict) -> Precompute:
         print(f"Collecting Frames for {hm}-Homology...\n")
+
         print("Collecting residual frames...")
-        energy_frame = self.compute_frame('energy')
-        box_frame = self.compute_frame('box')
-        force_frame = self.compute_frame('force')
-        type_frame = self.compute_frame('type')
-        virial_frame = self.compute_frame('virial')
+        energy_frame = self.compute_energy_frame(total_dict=total_dict)
+        box_frame = self.compute_box_frame(total_dict=total_dict)
+        force_frame = self.compute_force_frame(total_dict=total_dict)
+        type_frame = self.compute_type_frame(total_dict=total_dict)
+        virial_frame = self.compute_virial_frame(total_dict=total_dict)
+
+        print()
+        splits = self.find_num_transitions()
+
         print()
         print(f"Creating Rips Frame for {hm}-Homology...")
-        rips_frame = self.compute_rips_frame(hm=hm)
+        rips_frame = self.compute_rips_frame(hm=hm, total_dict=total_dict)
+
         return Precompute(
             box=box_frame,
             energy=energy_frame,
@@ -176,5 +309,6 @@ class PrecomputeIVDW:
             type=type_frame,
             virial=virial_frame,
             rips=rips_frame,
+            splits=splits,
             homology=hm
         )

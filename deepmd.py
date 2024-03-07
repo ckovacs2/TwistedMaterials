@@ -39,13 +39,15 @@ class DeepMD:
         return mol_num
     
     def _convert_type(self, types: ndarray, type_map: ndarray) -> ndarray:
+        def map_types(x, types_dict):
+            return types_dict[x]
+
         # build dictionary
         type_map_values = type_map.flatten().tolist()
         types_dict = {i: tm for i, tm in enumerate(type_map_values)}
 
         types_flatten = types.flatten().tolist()
-        f = lambda x: types_dict[x]
-        new_types = np.array(list(map(f, types_flatten)))
+        new_types = np.array(list(map(map_types, (types_flatten, types_dict))))
         return new_types
 
     def _collect_data(self) -> None:

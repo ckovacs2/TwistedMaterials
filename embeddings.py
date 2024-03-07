@@ -6,48 +6,35 @@ from matplotlib import rcParams, rcParamsDefault
 from collections import defaultdict
 import numpy as np
 from sklearn.cluster import KMeans
-from persistence import RipsComplexDeepMD
 
 class PBoW:
     def __init__(
         self, 
-        rips_complex: RipsComplexDeepMD,
-        hom_class: int = 1,
+        diags: np.array,
         nclusters:int = 5,
     ) -> None:
-        self.rc_meta_ = rips_complex.meta_
         self.nclusters = nclusters
-        self.diags_ = self._validate_diags(rips_complex.diag)
-        self.descriptor = self._get_descriptor(self.diags_, hom=hom_class)
-        self.features = self._get_features(self.descriptor)
+        self.cluster_centers = self._get_embeddings(diags)
 
-    def _validate_diags(self, diags):
-        if isinstance(diags[0], ndarray):
-            raise ValueError("The input RipsComplex must be a super cell or list of persistence diagrams")
-
-        self.super_cell_ = True
-        self.hm_classes_ = list(range(len(diags[0])))
-        return diags
-
-    def _get_descriptor(self, diags, hom:int = 1):
-        N = len(diags)
-
-        curr_diags = [[d.tolist() for d in diag[hom]] for diag in diags]
+    def _get_embeddings(self, diags):
         # get unique points for each pers diag
-        convert_list = [v for cd in curr_diags for v in cd]
-        unique_diags = [list(x) for x in set(tuple(x) for x in convert_list)]
+        unique_diags = [list(x) for x in set(tuple(x) for x in diags.tolist())]
         
         # collect clusters for each hom class
         kmeans = KMeans(n_clusters=self.nclusters, random_state=42)
         model = kmeans.fit(unique_diags)
         cluster_centers = model.cluster_centers_
 
+        return cluster_centers
+
+    def _get_descriptor(self, curr_diags):
+
         # find closest cluster index
         cluster_index = defaultdict(list)
         for cell, diag in enumerate(curr_diags):
             cluster_index[cell] = []
             for i, point in enumerate(diag):
-                idx = np.sum((point - cluster_centers)**2, axis=1).argmin()
+                idx = np.sum((point - self.cluster_centers)**2, axis=1).argmin()
                 cluster_index[cell].append((i, idx))
 
         # find cardinality
@@ -59,15 +46,14 @@ class PBoW:
             vpbow_dict[cell] = list(vpbow_dict[cell].values())
 
         # convert to matrix 
-        vpbow_matrix = np.zeros((N, self.nclusters))
-        for cell in list(vpbow_dict.keys()):
-            vpbow_matrix[cell, :] = vpbow_dict[cell]
+        vpbow_matrix = np.array(list(vpbow_dict.values()))
         
         return vpbow_matrix
 
-    def _get_features(
-        self, descriptor: ndarray
+    def features(
+        self, curr_diags
     ) -> ndarray:
+        descriptor = self._get_descriptor(curr_diags=curr_diags)
         features = descriptor.copy()
         features = np.sign(features) * np.sqrt(np.abs(features)) / np.linalg.norm(features, axis = 0)
         features = np.nan_to_num(features, copy=True, nan=0)
