@@ -1,0 +1,10 @@
+dpdata==0.2.17
+matplotlib==3.8.2
+numpy==1.26.4
+pandas==2.2.1
+persim==0.3.4
+pymatgen==2024.3.1
+ripser==0.6.4
+scikit_learn==1.4.0
+torch==2.2.0
+tqdm==4.66.2
