@@ -3,7 +3,7 @@
 from numpy import ndarray
 import matplotlib.pyplot as plt
 from matplotlib import rcParams, rcParamsDefault
-from collections import defaultdict
+import pandas as pd
 import numpy as np
 from sklearn.cluster import KMeans
 
@@ -30,31 +30,33 @@ class PBoW:
     def _get_descriptor(self, curr_diags):
 
         # find closest cluster index
-        cluster_index = defaultdict(list)
-        for cell, diag in enumerate(curr_diags):
-            cluster_index[cell] = []
-            for i, point in enumerate(diag):
-                idx = np.sum((point - self.cluster_centers)**2, axis=1).argmin()
-                cluster_index[cell].append((i, idx))
+        cluster_indices = []
+        for (path, trans), curr_diag in curr_diags.items():
+            for diag in curr_diag:
+                cluster_idx = np.sum((diag - self.cluster_centers)**2, axis=1).argmin()
+                cluster_indices.append((path, trans, cluster_idx))
+
+        cluster_indices = pd.DataFrame(cluster_indices, 
+                                    columns = ['path', 'trans', 'cluster_idx'])
 
         # find cardinality
-        vpbow_dict = {}
-        for cell, indices in cluster_index.items():
-            vpbow_dict[cell] = {i: 0 for i in range(self.nclusters)}
-            for cluster_num in indices:
-                vpbow_dict[cell][cluster_num] += 1
-            vpbow_dict[cell] = list(vpbow_dict[cell].values())
-
-        # convert to matrix 
-        vpbow_matrix = np.array(list(vpbow_dict.values()))
-        
-        return vpbow_matrix
+        value_counts = cluster_indices.groupby(['path', 'trans', 'cluster_idx'], as_index=False).size()
+        pivot_table = value_counts.pivot_table(index=['path', 'trans'], columns='cluster_idx', fill_value=0).reset_index(drop = True)
+        pivot_table.columns = pivot_table.columns.droplevel(0)
+        pivot_table.columns.name = None
+        unmatched_cluster = list(set(range(self.nclusters)) - set(pivot_table.columns))
+        if len(unmatched_cluster) != 0:
+            for uc in unmatched_cluster:
+                pivot_table[uc] = 0.
+            pivot_table = pivot_table[list(range(self.nclusters))]
+        pivot_table = pivot_table.values
+        return pivot_table
 
     def features(
         self, curr_diags
     ) -> ndarray:
-        descriptor = self._get_descriptor(curr_diags=curr_diags)
-        features = descriptor.copy()
+        self.descriptor = self._get_descriptor(curr_diags=curr_diags)
+        features = self.descriptor.copy()
         features = np.sign(features) * np.sqrt(np.abs(features)) / np.linalg.norm(features, axis = 0)
         features = np.nan_to_num(features, copy=True, nan=0)
         return features 

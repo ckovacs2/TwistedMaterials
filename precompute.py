@@ -22,7 +22,11 @@ class Precompute:
 class PrecomputeIVDW:
     def __init__(self, hm:int, tmd_path:str = "TMD"):
         self.tmd_path = tmd_path
-        total_dict = self.compute_dict()
+        load_dict_if_needed = self.check_load_dict_need(tmd_path=tmd_path)
+        if not load_dict_if_needed:
+            total_dict = self.compute_dict()
+        else:
+            total_dict = {}
         self.precompute = self.collect_frames(hm=hm, total_dict=total_dict)
 
     def compute_dict(self) -> Dict[str, Dict]:
@@ -96,6 +100,23 @@ class PrecomputeIVDW:
         np.save("TMD/dicts/virial_dict.npy", virial_dict, allow_pickle=True)
         np.save("TMD/dicts/rips_dict.npy", rips_complexes, allow_pickle=True)
         return tmd_dict
+    
+    def check_load_dict_need(self, tmd_path: str) -> bool:
+        frames_dir = os.path.join(tmd_path, 'frames')
+        filenames = [
+            'box_frame.parquet', 
+            'energy_frame.parquet', 
+            'force_frame.parquet', 
+            'rips_0_frame.parquet',
+            'rips_1_frame.parquet',
+            'rips_2_frame.parquet',
+            'type_frame.parquet',
+            'virial_frame.parquet'
+        ]
+        if all(os.path.exists(os.path.join(frames_dir, filename)) for filename in filenames):
+            return True
+        else:
+            return False
     
     def construct_file_frame(self, curr_frame: pd.DataFrame, filepath:str) -> pd.DataFrame:
         path_column = curr_frame['path'].apply(lambda x: x.split("/")[1:])
@@ -286,7 +307,8 @@ class PrecomputeIVDW:
         return frame
     
     def collect_frames(self, hm:int, total_dict: Dict) -> Precompute:
-        print(f"Collecting Frames for {hm}-Homology...\n")
+        text = f"Collecting Frames for {hm}-Homology..."
+        print(f"{text:^10}\n")
 
         print("Collecting residual frames...")
         energy_frame = self.compute_energy_frame(total_dict=total_dict)
@@ -297,7 +319,6 @@ class PrecomputeIVDW:
 
         print()
         splits = self.find_num_transitions()
-
         print()
         print(f"Creating Rips Frame for {hm}-Homology...")
         rips_frame = self.compute_rips_frame(hm=hm, total_dict=total_dict)
