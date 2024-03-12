@@ -49,7 +49,6 @@ class PBoW:
             for uc in unmatched_cluster:
                 pivot_table[uc] = 0.
             pivot_table = pivot_table[list(range(self.nclusters))]
-        pivot_table = pivot_table.values
         return pivot_table
 
     def features(
