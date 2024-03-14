@@ -29,7 +29,7 @@ class PBowDataset(Dataset):
         self.precompute = PrecomputeIVDW(hm=self.hm_class, tmd_path=data_dir).precompute
         self.fileframe, self.filepaths = self._get_file_frame(datatype=dataset_type)
         self.pbow = self._get_pbow_instance(self.precompute.rips)
-        self.force, self.energy = self._get_labels()
+        self.labels = self._get_labels()
         self.features = self._get_features()
 
     def __len__(self) -> int:
@@ -55,10 +55,17 @@ class PBowDataset(Dataset):
 
     def _get_labels(self) -> tuple[ndarray, ndarray]:
         force_frame = self.precompute.force[self.precompute.force['path'].isin(self.filepaths)].reset_index(drop = True)
-        energy_frame = self.precompute.energy[self.precompute.force['path'].isin(self.filepaths)].reset_index(drop = True)
+        energy_frame = self.precompute.energy[self.precompute.energy['path'].isin(self.filepaths)].reset_index(drop = True)
+        box_frame = self.precompute.box[self.precompute.box['path'].isin(self.filepaths)].reset_index(drop = True)
         force = force_frame.iloc[:, 4:].values
         energy = energy_frame['energy'].values
-        return force, energy
+        box = box_frame.iloc[:, 4:].values
+        labels = {
+          "force": force,
+          "energy": energy,
+          "box": box
+        }
+        return labels
     
     def _get_rips_complex(self) -> ndarray:
         rips_frame = self.precompute.rips[self.precompute.rips['path'].isin(self.filepaths)].reset_index(drop = True)
@@ -87,7 +94,8 @@ class PBowDataset(Dataset):
         
         sample = {
             "data": self.features.iloc[idx, :].values,
-            "force": self.force[idx, :],
-            "energy": self.energy[idx]
+            "force": self.labels['force'][idx, :],
+            "energy": self.labels['energy'][idx],
+            "box": self.labels['box'][idx, :]
         }
         return sample
